@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TEDLAVIP MTM TRIP </title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #0F172A;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #1E293B;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .header {
+            text-align: center;
+            background: #0B2A4A;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .header h2 {
+            color: #1D9BF0;
+            margin: 0;
+        }
+
+        textarea {
+            width: 100%;
+            height: 220px;
+            background: #0F172A;
+            color: white;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 14px;
+            line-height: 1.0;   
+            resize: none;
+            overflow: hidden;
+        }
+
+        button {
+            padding: 10px 14px;
+            margin: 5px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-primary { background: #1D9BF0; color: white; }
+        .btn-success { background: #22C55E; color: white; }
+
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropbtn {
+            background: #0B2A4A;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background: #0F172A;
+            min-width: 260px;
+            border-radius: 6px;
+            padding: 10px;
+            z-index: 1;
+            border: 1px solid #334155;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .dropdown-content label {
+            display: block;
+            padding: 5px;
+        }
+
+        .status {
+            margin-top: 10px;
+            color: #94A3B8;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <h2>TEDLAVIP MTM TRIP</h2>
+</div>
+
+<div class="container">
+
+    <!-- COLUMN SELECT -->
+    <h3 style="color:#1D9BF0;">Select Columns</h3>
+
+    <div class="dropdown">
+        <button onclick="toggleDropdown()" class="dropbtn">Select Columns ▼</button>
+        <div id="dropdownContent" class="dropdown-content"></div>
+    </div>
+
+    <button class="btn-success" onclick="applyColumns()">Apply</button>
+
+    <hr style="border-color:#334155;">
+
+    <!-- ROW EDITOR -->
+    <textarea id="rowEditor"></textarea>
+
+    <div>
+        <button class="btn-primary" onclick="prevRow()">⬅ Prev</button>
+        <button class="btn-primary" onclick="nextRow()">Next ➡</button>
+    </div>
+
+    <div>
+        <button class="btn-success" onclick="saveRow()">💾 Save Row</button>
+
+       <button class="btn-primary" onclick="copyText()">
+    📋 Copy <span id="copyStatus"></span>
+</button>
+
+<button class="btn-primary" onclick="copyAll()">
+    📋 Copy All
+</button>
+
+        <button class="btn-success" onclick="exportExcel()">⬇ Download Excel</button>
+        <button class="btn-primary" onclick="backToUpload()">
+    ⬅ Back to Upload
+</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+</div>
+
+<script>
+const show = (field) => selectedColumns.includes(field);
+// ================= DATA =================
+let stored = JSON.parse(localStorage.getItem("data")) || {columns:[], data:[]};
+
+let columns = stored.columns;
+let rows = stored.data;
+
+let selectedColumns = [...columns];
+let filteredRows = [...rows];
+let currentIndex = 0;
+
+// ================= AUTO RESIZE TEXTAREA =================
+function autoResize() {
+    let ta = document.getElementById("rowEditor");
+    ta.style.height = "auto";
+    ta.style.height = ta.scrollHeight + "px";
+}
+
+// ================= PHONE FORMAT =================
+function formatPhone(p) {
+    if (!p) return "";
+    let digits = p.toString().replace(/\D/g, "");
+    if (digits.length === 10) {
+        return `(${digits.slice(0,3)})${digits.slice(3,6)}-${digits.slice(6)}`;
+    }
+    return p;
+}
+
+// ================= TIME -10 =================
+function minus10(t) {
+    if (!t) return "";
+
+    let parts = t.split(":");
+    if (parts.length !== 2) return t;
+
+    let h = parseInt(parts[0]);
+    let m = parseInt(parts[1]);
+
+    let total = h * 60 + m - 10;
+    if (total < 0) total = 0;
+
+    let nh = Math.floor(total / 60);
+    let nm = total % 60;
+
+    return `${String(nh).padStart(2,'0')}:${String(nm).padStart(2,'0')}`;
+}
+
+// ================= DROPDOWN =================
+let dropdown = document.getElementById("dropdownContent");
+
+columns.forEach(col => {
+    let label = document.createElement("label");
+    label.innerHTML = `<input type="checkbox" checked value="${col}"> ${col}`;
+    dropdown.appendChild(label);
+});
+
+// ================= TOGGLE =================
+function toggleDropdown() {
+    let d = document.getElementById("dropdownContent");
+    d.style.display = (d.style.display === "block") ? "none" : "block";
+}
+
+// ================= APPLY =================
+function applyColumns() {
+    let checked = document.querySelectorAll("#dropdownContent input:checked");
+    selectedColumns = Array.from(checked).map(c => c.value);
+
+    showRow();
+
+    document.getElementById("dropdownContent").style.display = "none";
+}
+
+// ================= SHOW ROW =================
+function showRow() {
+
+    let row = filteredRows[currentIndex] || {};
+    const get = (k) => row[k] ?? "";
+
+    // ========= TIME (SAFE SPLIT FIX) =========
+
+// ALWAYS keep raw value first (IMPORTANT)
+let rawTime = "";
+
+for (let key in row) {
+    let k = key.toLowerCase().replace(/\s+/g, "");
+    if (k === "time") {
+        rawTime = row[key];
+        break;
+    }
+}
+
+// normalize ONLY for detection
+let normalized = (rawTime || "")
+    .toString()
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+// WILL CALL CHECK (ONLY from raw text)
+let isWillCall = normalized.includes("will call");
+
+// TIME extraction ONLY for numeric cases
+let cleanTime = "";
+
+if (!isWillCall) {
+    let match = (rawTime || "").toString().match(/(\d{1,2}:\d{2})/);
+    cleanTime = match ? match[1] : "";
+}
+    // ========= CORE =========
+    let tripNumber = get("Trip Number") || get("Trip ID");
+    let firstName = get("Member's First Name") || get("First Name");
+    let lastName = get("Member's Last Name") || get("Last Name");
+
+    let puAddress = get("Pickup Address");
+    let puCity = get("Pickup City");
+    let puState = get("Pickup State");
+    let puZip = get("Pickup Zip Code");
+
+    let doAddress = get("Delivery Address");
+    let doCity = get("Delivery City");
+    let doState = get("Delivery State");
+    let doZip = get("Delivery Zip Code");
+
+    let phone = formatPhone(get("Member's Phone Number"));
+
+    let miles = get("Trip Mileage") || "0";
+    let service = get("Level of Service");
+
+    let passengerType = get("Passenger Type");
+    let aesc = get("Number of Additional Passengers") || "0";
+    let seats = get("Car Seats Required") || "0";
+
+    let notes = get("Special Needs") || "";
+
+    // ========= LEG =========
+    let leg = tripNumber ? tripNumber.slice(-1).toUpperCase() : "";
+
+    // ========= LOS =========
+    let los =
+        passengerType === "Ambulatory" ? "A" :
+        passengerType === "Manual Wheelchair" ? "W" :
+        passengerType || "";
+
+    let fullName = `${firstName} ${lastName}`.trim().toUpperCase();
+
+    let puFull = `${puAddress} ${puCity} ${puState} ${puZip}`.trim();
+    let doFull = `${doAddress} ${doCity} ${doState} ${doZip}`.trim();
+
+    // ========= TIME LOGIC =========
+    let puLine = "";
+let doLine = "";
+
+let tripLast = (tripNumber || "").toString().slice(-1).toUpperCase();
+
+// ================= RULE 3: WILL CALL =================
+if (isWillCall === true) {
+
+    puLine = `Will Call PU - ${puFull || ""}`;
+    doLine = `DO - ${doFull || ""}`;
+
+}
+
+// ================= RULE 2: END WITH A =================
+else if (tripLast === "A") {
+
+    puLine = `PU - ${puFull}`;
+    doLine = `${minus10(cleanTime)} DO - ${doFull}`;
+
+}
+
+// ================= RULE 1: B, C, D, E =================
+else if (["B","C","D","E"].includes(tripLast)) {
+
+    puLine = `${cleanTime} PU - ${puFull}`;
+    doLine = `DO - ${doFull}`;
+}
+
+// fallback
+else {
+
+    puLine = `${cleanTime} PU - ${puFull}`;
+    doLine = `DO - ${doFull}`;
+}
+    // ========= BUILD OUTPUT BASED ON SELECTED COLUMNS =========
+    let text = `MTM TRIP
+${show("Trip Number") ? `Trip Number- ${tripNumber}` : ""}
+${show("Trip Number") ? `LEG- ${leg}` : ""}
+${show("Member's First Name") || show("Member's Last Name") ? `Member Name- ${fullName}` : ""}
+
+${show("Pickup Address") ? puLine : ""}
+
+${show("Member's Phone Number") ? `Member’s phone no- ${phone}` : ""}
+
+${show("Delivery Address") ? doLine : ""}
+
+${show("Trip Mileage") ? `Trip Miles - ${miles}` : ""}
+${show("Level of Service") ? `Level of service- ${service}` : ""}
+${show("Passenger Type") ? `LOS: ${los}   AESC:${aesc} Seats: ${seats}` : ""}
+${show("Special Needs") ? `Note: ${notes}` : ""}`;
+
+    // ========= APPLY =========
+    document.getElementById("rowEditor").value = text;
+    // STYLE MTM TRIP visually (does NOT affect copy)
+let ta = document.getElementById("rowEditor");
+
+setTimeout(() => {
+    ta.style.fontWeight = "normal";
+}, 0);
+
+    document.getElementById("status").innerText =
+        `Row ${currentIndex + 1} of ${filteredRows.length}`;
+
+    autoResize();
+}
+// ================= NAVIGATION =================
+function nextRow() {
+    if (currentIndex < filteredRows.length - 1) {
+        currentIndex++;
+        showRow();
+    }
+}
+
+function prevRow() {
+    if (currentIndex > 0) {
+        currentIndex--;
+        showRow();
+    }
+}
+// ================= SAVE =================
+function saveRow() {
+    document.getElementById("status").innerText = "✔ Saved (display only)";
+}
+
+// ================= COPY CURRENT ROW =================
+function copyText() {
+    let text = document.getElementById("rowEditor").value;
+
+    navigator.clipboard.writeText(text);
+
+    document.getElementById("copyStatus").innerText = "Copied";
+    setTimeout(() => {
+        document.getElementById("copyStatus").innerText = "";
+    }, 1500);
+}
+
+
+// ================= COPY ALL ROWS =================
+function copyAll() {
+
+    let output = [];
+    let separator = "--------------------------------------------------------------------------------";
+
+    let originalIndex = currentIndex; // save current row
+
+    for (let i = 0; i < filteredRows.length; i++) {
+
+        currentIndex = i;
+        showRow(); // reuse SAME format
+
+        let text = document.getElementById("rowEditor").value;
+
+        output.push(`${text}\n${separator}`);
+    }
+
+    currentIndex = originalIndex; // restore original row
+    showRow(); // show back current row
+
+    let finalText = output.join("\n");
+
+    navigator.clipboard.write([
+    new ClipboardItem({
+        "text/plain": new Blob([finalText], { type: "text/plain" }),
+        "text/html": new Blob([formatForWord(finalText)], { type: "text/html" })
+    })
+]);
+    document.getElementById("copyStatus").innerText = "All Copied";
+    setTimeout(() => {
+        document.getElementById("copyStatus").innerText = "";
+    }, 2000);
+}
+// ================= FORMAT FOR WORD =================
+function formatForWord(text) {
+
+    let lines = text.split("\n");
+
+    let html = "";
+
+    for (let line of lines) {
+
+        if (line.trim() === "MTM TRIP") {
+            html += `<p style="color:#0070C0; font-weight:bold; margin:0;">${line}</p>`;
+        } else {
+            html += `<p style="color:#000000; margin:0;">${line}</p>`;
+        }
+    }
+
+    return `<div style="font-family:Arial;">${html}</div>`;
+}
+// ================= EXPORT =================
+function exportExcel() {
+
+    let csv = [];
+
+    for (let row of rows) {
+        let line = [];
+        selectedColumns.forEach(col => {
+            line.push('"' + (row[col] || "") + '"');
+        });
+        csv.push(line.join(","));
+    }
+
+    let blob = new Blob([csv.join("\n")], { type: "text/csv" });
+    let url = URL.createObjectURL(blob);
+
+    let a = document.createElement("a");
+    a.href = url;
+    a.download = "TEDLAVIP_export.csv";
+    a.click();
+}
+
+// INIT
+showRow();
+function backToUpload() {
+
+    // save current edited dataset
+    localStorage.setItem("data", JSON.stringify({
+        columns: columns,
+        data: filteredRows
+    }));
+
+    alert("Saved! Redirecting to upload...");
+
+    // go back
+   window.location.href = "http://localhost:5050/";
+}
+</script>
+
+</body>
+</html>

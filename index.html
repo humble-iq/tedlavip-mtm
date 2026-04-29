@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TEDLAVIP Upload</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #0F172A;
+            color: white;
+            text-align: center;
+            margin-top: 100px;
+        }
+
+        .box {
+            background: #1E293B;
+            width: 420px;
+            margin: auto;
+            padding: 30px;
+            border-radius: 10px;
+        }
+
+        h2 { color: #1D9BF0; }
+
+        button {
+            padding: 10px 16px;
+            background: #22C55E;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .status {
+            margin-top: 15px;
+            color: #94A3B8;
+        }
+
+        .error { color: #EF4444; }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+    <h2>TEDLAVIP Upload</h2>
+
+    <input type="file" id="file"><br><br>
+
+    <button onclick="upload()">Upload</button>
+
+    <div class="status" id="status"></div>
+</div>
+
+<script>
+function upload() {
+    let file = document.getElementById("file").files[0];
+    let status = document.getElementById("status");
+
+    if (!file) {
+        status.innerHTML = "<span class='error'>Select a file</span>";
+        return;
+    }
+
+    status.innerText = "Uploading...";
+
+    let formData = new FormData();
+    formData.append("file", file);
+
+    fetch("/upload", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        // 🔥 SAVE DATA FOR EDITOR
+        localStorage.setItem("data", JSON.stringify(data));
+
+        status.innerText = "✔ Upload success";
+
+        setTimeout(() => {
+            window.location.href = "/editor";
+        }, 500);
+    })
+    .catch(err => {
+        console.error(err);
+        status.innerHTML = "<span class='error'>Upload failed</span>";
+    });
+}
+</script>
+
+</body>
+</html>
